@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AppState ➜ Access Token</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to right, #f12711, #f5af19);
+      color: #fff;
+      text-align: center;
+      padding: 50px;
+    }
+    textarea {
+      width: 90%;
+      height: 200px;
+      padding: 10px;
+      border-radius: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 20px;
+      background: #fff;
+      color: #f12711;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .output {
+      margin-top: 30px;
+      background: #fff;
+      color: #000;
+      padding: 15px;
+      border-radius: 10px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>Convert Facebook AppState ➜ EAA Token</h1>
+  <form method="POST">
+    <textarea name="appstate" placeholder="Paste AppState JSON here..." required></textarea><br>
+    <button type="submit">Convert AppState into Token</button>
+  </form>
+
+  {% if token %}
+    <div class="output">
+      <h3>✅ Your Access Token:</h3>
+      <p>{{ token }}</p>
+    </div>
+  {% elif error %}
+    <div class="output">
+      <h3>❌ Error:</h3>
+      <p>{{ error }}</p>
+    </div>
+  {% endif %}
+</body>
+</html>
