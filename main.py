@@ -1,7 +1,6 @@
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template
 import requests
 import json
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -33,3 +32,6 @@ def index():
             error = f"Error: {str(e)}"
 
     return render_template("index.html", token=token, error=error)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
