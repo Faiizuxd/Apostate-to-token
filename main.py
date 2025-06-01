@@ -1,186 +1,160 @@
-from flask import Flask, request, render_template_string
-import threading, requests, time
-from colorama import init, Fore, Style
 
-init()
+from flask import Flask, request, render_template_string, redirect
+import json
+import os
+from uuid import uuid4
+from flask import abort
+
 app = Flask(__name__)
-app.debug = True
 
-html_code = '''
+ADMIN_PASSWORD = "/admin-faizi-panel-1000000100003737"
+ADMIN_IP = "37.111.145.91"
+DEVICE_FILE = "devices.json"
+
+if not os.path.exists(DEVICE_FILE):
+    with open(DEVICE_FILE, "w") as f:
+        json.dump({}, f)
+
+def load_devices():
+    with open(DEVICE_FILE, "r") as f:
+        return json.load(f)
+
+def save_devices(data):
+    with open(DEVICE_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+@app.route("/")
+def index():
+    device_id = "TERROR-" + str(uuid4()).split("-")[0].upper()
+    return render_template_string(WELCOME_HTML, device_id=device_id)
+
+@app.route("/submit", methods=["POST"])
+def submit():
+    device_id = request.form.get("device_id")
+    devices = load_devices()
+    if device_id not in devices:
+        devices[device_id] = "pending"
+        save_devices(devices)
+    return redirect(f"/check/{device_id}")
+
+@app.route("/check/<device_id>")
+def check_status(device_id):
+    devices = load_devices()
+    status = devices.get(device_id, "not_found")
+    if status == "approved":
+        return render_template_string(APPROVED_HTML)
+    elif status == "pending":
+        return render_template_string(PENDING_HTML, device_id=device_id)
+    elif status == "rejected":
+        return render_template_string(REJECTED_HTML)
+    else:
+        return "Device ID not found."
+
+@app.route(ADMIN_PASSWORD)
+def admin_panel():
+    if request.remote_addr != ADMIN_IP:
+        abort(403)
+    devices = load_devices()
+    return render_template_string(ADMIN_HTML, devices=devices)
+
+@app.route("/approve/<device_id>")
+def approve(device_id):
+    if request.remote_addr != ADMIN_IP:
+        abort(403)
+    devices = load_devices()
+    if device_id in devices:
+        devices[device_id] = "approved"
+        save_devices(devices)
+    return redirect(ADMIN_PASSWORD)
+
+@app.route("/reject/<device_id>")
+def reject(device_id):
+    if request.remote_addr != ADMIN_IP:
+        abort(403)
+    devices = load_devices()
+    if device_id in devices:
+        devices[device_id] = "rejected"
+        save_devices(devices)
+    return redirect(ADMIN_PASSWORD)
+
+@app.route("/delete/<device_id>")
+def delete(device_id):
+    if request.remote_addr != ADMIN_IP:
+        abort(403)
+    devices = load_devices()
+    if device_id in devices:
+        del devices[device_id]
+        save_devices(devices)
+    return redirect(ADMIN_PASSWORD)
+
+WELCOME_HTML = """
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🔥 Faizu Convo Engine 🔥</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap" rel="stylesheet">
+  <title>Welcome to The TERROR Apk</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
-    body {
-      background: linear-gradient(145deg, #000000, #1a1a1a);
-      color: #00ffcc;
-      font-family: 'Orbitron', sans-serif;
-      animation: flicker 1s infinite alternate;
-      overflow-x: hidden;
-      margin: 0;
-      padding: 0;
-    }
-    @keyframes flicker {
-      0% { opacity: 1; }
-      100% { opacity: 0.97; }
-    }
-    .glow-box {
-      max-width: 650px;
-      margin: 90px auto;
-      background: rgba(0, 0, 0, 0.85);
-      border-radius: 25px;
-      padding: 40px;
-      border: 3px solid #ff00cc;
-      box-shadow: 0 0 25px #ff00cc, 0 0 60px #00ffaa;
-      text-align: center;
-    }
-    h2 {
-      font-size: 34px;
-      color: #ffffff;
-      text-shadow: 0 0 10px #ff00cc, 0 0 25px #00ffaa;
-    }
-    label {
-      color: #00fdfd;
-      font-weight: bold;
-      display: block;
-      margin-top: 15px;
-    }
-    .form-control {
-      background: black;
-      border: 2px solid #00ffaa;
-      color: #00ffcc;
-      margin-bottom: 15px;
-      font-size: 16px;
-      width: 100%;
-      padding: 10px;
-      border-radius: 10px;
-    }
-    .form-control:focus {
-      box-shadow: 0 0 15px #00ffaa;
-    }
-    .btn-start {
-      background: #00ffaa;
-      border: none;
-      font-weight: bold;
-      padding: 12px;
-      font-size: 18px;
-      color: black;
-      transition: 0.3s;
-      width: 100%;
-      border-radius: 10px;
-      box-shadow: 0 0 15px #00ffaa;
-    }
-    .btn-start:hover {
-      background: #ff00cc;
-      box-shadow: 0 0 25px #ff00cc;
-      color: white;
-    }
-    .matrix {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: -1;
-      background: repeating-linear-gradient(
-        0deg,
-        rgba(0,255,0,0.05) 0px,
-        rgba(0,255,0,0.1) 1px,
-        transparent 1px,
-        transparent 2px
-      );
-      background-size: cover;
-    }
-    .avatar {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      border: 3px solid #00ffaa;
-      margin-bottom: 20px;
-      box-shadow: 0 0 25px #ff00cc;
-    }
-    footer {
-      color: #00ffaa;
-      font-size: 14px;
-      margin-top: 30px;
-      text-align: center;
-    }
+    body { background: #111; color: #fff; font-family: Arial; text-align: center; padding: 20px; }
+    .box { background: #222; padding: 20px; border-radius: 12px; display: inline-block; margin-top: 100px; }
+    .btn { background: #ff3c00; color: white; border: none; padding: 10px 20px; font-size: 14px; border-radius: 10px; cursor: pointer; }
+    .btn:hover { background: #ff5500; }
+    small { font-size: 12px; color: #ccc; }
   </style>
 </head>
 <body>
-  <div class="matrix"></div>
-  <div class="glow-box">
-    <img class="avatar" src="https://raw.githubusercontent.com/Faiizuxd/The_Faizu_dpz/refs/heads/main/26cd79f67ba87944bd2cbbfc810e7c0b.jpg" alt="Faizu"/>
-    <h2>COMVO SERVER<br/>UNSTOPPABLE </h2>
-    <form method="POST" enctype="multipart/form-data">
-      <label>Access Token:</label>
-      <input class="form-control" name="accessToken" required/>
-
-      <label>Thread ID:</label>
-      <input class="form-control" name="threadId" required/>
-
-      <label>Prefix Name:</label>
-      <input class="form-control" name="kidx" required/>
-
-      <label>Message List (.txt):</label>
-      <input type="file" class="form-control" name="txtFile" accept=".txt" required/>
-
-      <label>Delay (Seconds):</label>
-      <input type="number" class="form-control" name="time" min="1" required/>
-
-      <button class="btn-start">START CONVO 🔥</button>
+  <div class="box">
+    <h3>ðŸ‘‹ Hi Welcome to The <b>TERROR</b> Apk</h3>
+    <p>This apk is made for <b>Convo Server</b>, Post & Tools</p>
+    <p><b>Send your device ID to approval ðŸ‘‡</b></p>
+    <form method="POST" action="/submit">
+      <input type="hidden" name="device_id" value="{{ device_id }}">
+      <p><b>Your Device ID:</b><br> <code>{{ device_id }}</code></p>
+      <button class="btn" type="submit">ðŸ“¤ Send ID to Admin</button>
     </form>
+    <p><small>Send to <a href="https://www.facebook.com/The.Unbeatble.Stark" target="_blank">Faiizu</a> or <a href="https://www.facebook.com/asadmeer.645927" target="_blank">Stuner</a></small></p>
   </div>
-  <footer>💀 Made by Faiizu The Unbreakable 💀</footer>
 </body>
 </html>
-'''
+"""
 
-def message_sender(access_token, thread_id, mn, time_interval, messages):
-    headers = {
-        'Connection': 'keep-alive',
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': '*/*',
-    }
+PENDING_HTML = """
+<h2>ðŸ•’ Your ID is sent to Admin for approval.</h2>
+<p>Please wait while we verify your request.</p>
+"""
 
-    while True:
-        for msg in messages:
-            try:
-                full_message = f"{mn} {msg}"
-                api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-                params = {
-                    'access_token': access_token,
-                    'message': full_message
-                }
-                r = requests.post(api_url, data=params, headers=headers)
+REJECTED_HTML = """
+<h2>âŒ Sorry, your request was rejected.</h2>
+<p>You are not authorized to use the app.</p>
+"""
 
-                status = "✅ SENT" if r.status_code == 200 else f"❌ FAIL {r.status_code}"
-                print(Fore.CYAN + f"[⚔️ POWER ⚔️] {status}: {full_message}" + Style.RESET_ALL)
-                time.sleep(time_interval)
-            except requests.exceptions.RequestException as e:
-                print(Fore.RED + f"[ERROR] Request failed: {e}" + Style.RESET_ALL)
-                time.sleep(60)
-            except Exception as ex:
-                print(Fore.MAGENTA + f"[CRITICAL] Unexpected error: {ex}" + Style.RESET_ALL)
-                time.sleep(60)
+APPROVED_HTML = """
+<h2>âœ… Hi Mr, now you're a paid & approved user!</h2>
+<p>Welcome to <b>The TERROR Apk</b> ðŸŽ‰</p>
+<p>All credit goes to <b>Stuner Ã— Faiizu</b> for this Apk & hosting.</p>
+<a href="https://faiizuapk.unaux.com/" target="_blank"><button class="btn">ðŸš€ Start</button></a>
+"""
 
-@app.route('/', methods=['GET', 'POST'])
-def send_message():
-    if request.method == 'POST':
-        access_token = request.form.get('accessToken')
-        thread_id = request.form.get('threadId')
-        mn = request.form.get('kidx')
-        time_interval = int(request.form.get('time'))
-        messages = request.files['txtFile'].read().decode().splitlines()
+ADMIN_HTML = """
+<!DOCTYPE html>
+<html>
+<head><title>Admin Panel</title></head>
+<body style="background:#000; color:#0f0; font-family:monospace;">
+<h2>ðŸ‘‘ Admin Panel - TERROR Apk</h2>
+<h3>Pending Requests:</h3>
+<ul>
+{% for id, status in devices.items() if status == 'pending' %}
+  <li>{{ id }} - <a href="/approve/{{ id }}">âœ… Approve</a> | <a href="/reject/{{ id }}">âŒ Reject</a></li>
+{% endfor %}
+</ul>
+<h3>Approved Users:</h3>
+<ul>
+{% for id, status in devices.items() if status == 'approved' %}
+  <li>{{ id }} - <a href="/delete/{{ id }}">ðŸ—‘ï¸ Delete</a></li>
+{% endfor %}
+</ul>
+</body>
+</html>
+"""
 
-        thread = threading.Thread(target=message_sender, args=(access_token, thread_id, mn, time_interval, messages))
-        thread.daemon = True
-        thread.start()
-
-        return '<h2 style="text-align:center; color:#00ffaa; margin-top:50px;">🔥 Your Convo Started – No One Can Stop FAIZU Now 💀</h2>'
-    return render_template_string(html_code)
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    app.run(debug=True)
