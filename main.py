@@ -1,160 +1,234 @@
-
-from flask import Flask, request, render_template_string, redirect
-import json
-import os
-from uuid import uuid4
-from flask import abort
+from flask import Flask, request, redirect, url_for, render_template_string, jsonify
+import uuid
 
 app = Flask(__name__)
 
-ADMIN_PASSWORD = "/admin-faizi-panel-1000000100003737"
-ADMIN_IP = "37.111.145.91"
-DEVICE_FILE = "devices.json"
+# Store device approvals
+devices = {}
+approved_devices = {}
 
-if not os.path.exists(DEVICE_FILE):
-    with open(DEVICE_FILE, "w") as f:
-        json.dump({}, f)
+# Admin Config
+ADMIN_PATH = '/admin-faizi-panel-1000000100003737'
+ADMIN_IP = '37.111.145.91'
 
-def load_devices():
-    with open(DEVICE_FILE, "r") as f:
-        return json.load(f)
+FONT_AWESOME = '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">'
 
-def save_devices(data):
-    with open(DEVICE_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-@app.route("/")
-def index():
-    device_id = "TERROR-" + str(uuid4()).split("-")[0].upper()
-    return render_template_string(WELCOME_HTML, device_id=device_id)
-
-@app.route("/submit", methods=["POST"])
-def submit():
-    device_id = request.form.get("device_id")
-    devices = load_devices()
-    if device_id not in devices:
-        devices[device_id] = "pending"
-        save_devices(devices)
-    return redirect(f"/check/{device_id}")
-
-@app.route("/check/<device_id>")
-def check_status(device_id):
-    devices = load_devices()
-    status = devices.get(device_id, "not_found")
-    if status == "approved":
-        return render_template_string(APPROVED_HTML)
-    elif status == "pending":
-        return render_template_string(PENDING_HTML, device_id=device_id)
-    elif status == "rejected":
-        return render_template_string(REJECTED_HTML)
-    else:
-        return "Device ID not found."
-
-@app.route(ADMIN_PASSWORD)
-def admin_panel():
-    if request.remote_addr != ADMIN_IP:
-        abort(403)
-    devices = load_devices()
-    return render_template_string(ADMIN_HTML, devices=devices)
-
-@app.route("/approve/<device_id>")
-def approve(device_id):
-    if request.remote_addr != ADMIN_IP:
-        abort(403)
-    devices = load_devices()
-    if device_id in devices:
-        devices[device_id] = "approved"
-        save_devices(devices)
-    return redirect(ADMIN_PASSWORD)
-
-@app.route("/reject/<device_id>")
-def reject(device_id):
-    if request.remote_addr != ADMIN_IP:
-        abort(403)
-    devices = load_devices()
-    if device_id in devices:
-        devices[device_id] = "rejected"
-        save_devices(devices)
-    return redirect(ADMIN_PASSWORD)
-
-@app.route("/delete/<device_id>")
-def delete(device_id):
-    if request.remote_addr != ADMIN_IP:
-        abort(403)
-    devices = load_devices()
-    if device_id in devices:
-        del devices[device_id]
-        save_devices(devices)
-    return redirect(ADMIN_PASSWORD)
-
-WELCOME_HTML = """
+# HTML Templates
+user_template = f"""
+{FONT_AWESOME}
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Welcome to The TERROR Apk</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <title>The TERROR Apk</title>
   <style>
-    body { background: #111; color: #fff; font-family: Arial; text-align: center; padding: 20px; }
-    .box { background: #222; padding: 20px; border-radius: 12px; display: inline-block; margin-top: 100px; }
-    .btn { background: #ff3c00; color: white; border: none; padding: 10px 20px; font-size: 14px; border-radius: 10px; cursor: pointer; }
-    .btn:hover { background: #ff5500; }
-    small { font-size: 12px; color: #ccc; }
+    body {{
+      background: linear-gradient(45deg, #ff0040, #ffd000);
+      font-family: Arial, sans-serif;
+      color: #fff;
+      text-align: center;
+      padding: 30px;
+    }}
+    .box {{
+      background: rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 20px;
+      margin: 20px;
+      box-shadow: 0 0 20px rgba(255,255,255,0.2);
+    }}
+    button {{
+      background: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      margin: 10px;
+      cursor: pointer;
+      transition: 0.3s;
+    }}
+    button:hover {{
+      background: #ff0040;
+      color: white;
+    }}
+    a {{
+      color: #ffd000;
+      text-decoration: none;
+    }}
   </style>
 </head>
 <body>
   <div class="box">
-    <h3>ðŸ‘‹ Hi Welcome to The <b>TERROR</b> Apk</h3>
-    <p>This apk is made for <b>Convo Server</b>, Post & Tools</p>
-    <p><b>Send your device ID to approval ðŸ‘‡</b></p>
-    <form method="POST" action="/submit">
-      <input type="hidden" name="device_id" value="{{ device_id }}">
-      <p><b>Your Device ID:</b><br> <code>{{ device_id }}</code></p>
-      <button class="btn" type="submit">ðŸ“¤ Send ID to Admin</button>
+    <h2>👋 Hi Welcome to <b>The TERROR Apk</b></h2>
+    <p>This APK is made for <b>Convo Server</b>, Posts, and Tools!</p>
+    <p>👇 Send your ID for Approval 👇</p>
+    <p><b>📱 Your Device ID:</b><br>{{device_id}}</p>
+    <form method="post" action="/send">
+      <input type="hidden" name="device_id" value="{{device_id}}">
+      <button type="submit">📤 Send ID to Admin</button>
     </form>
-    <p><small>Send to <a href="https://www.facebook.com/The.Unbeatble.Stark" target="_blank">Faiizu</a> or <a href="https://www.facebook.com/asadmeer.645927" target="_blank">Stuner</a></small></p>
+    <br>
+    <p>Send to: 
+      <a href="https://www.facebook.com/The.Unbeatble.Stark" target="_blank">Faiizu</a> |
+      <a href="https://www.facebook.com/asadmeer.645927" target="_blank">Stuner</a>
+    </p>
   </div>
 </body>
 </html>
 """
 
-PENDING_HTML = """
-<h2>ðŸ•’ Your ID is sent to Admin for approval.</h2>
-<p>Please wait while we verify your request.</p>
-"""
-
-REJECTED_HTML = """
-<h2>âŒ Sorry, your request was rejected.</h2>
-<p>You are not authorized to use the app.</p>
-"""
-
-APPROVED_HTML = """
-<h2>âœ… Hi Mr, now you're a paid & approved user!</h2>
-<p>Welcome to <b>The TERROR Apk</b> ðŸŽ‰</p>
-<p>All credit goes to <b>Stuner Ã— Faiizu</b> for this Apk & hosting.</p>
-<a href="https://faiizuapk.unaux.com/" target="_blank"><button class="btn">ðŸš€ Start</button></a>
-"""
-
-ADMIN_HTML = """
+approved_template = f"""
+{FONT_AWESOME}
 <!DOCTYPE html>
 <html>
-<head><title>Admin Panel</title></head>
-<body style="background:#000; color:#0f0; font-family:monospace;">
-<h2>ðŸ‘‘ Admin Panel - TERROR Apk</h2>
-<h3>Pending Requests:</h3>
-<ul>
-{% for id, status in devices.items() if status == 'pending' %}
-  <li>{{ id }} - <a href="/approve/{{ id }}">âœ… Approve</a> | <a href="/reject/{{ id }}">âŒ Reject</a></li>
-{% endfor %}
-</ul>
-<h3>Approved Users:</h3>
-<ul>
-{% for id, status in devices.items() if status == 'approved' %}
-  <li>{{ id }} - <a href="/delete/{{ id }}">ðŸ—‘ï¸ Delete</a></li>
-{% endfor %}
-</ul>
+<head>
+  <title>Welcome User</title>
+  <style>
+    body {{
+      background: linear-gradient(45deg, #ff0040, #ffd000);
+      font-family: Arial, sans-serif;
+      text-align: center;
+      color: white;
+      padding: 30px;
+    }}
+    .box {{
+      background: rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(255,255,255,0.2);
+    }}
+    button {{
+      background: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      margin-top: 20px;
+      cursor: pointer;
+      transition: 0.3s;
+    }}
+    button:hover {{
+      background: #ffd000;
+    }}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>🎉 Hi Mr, Now You're a Paid & Approved User</h2>
+    <p>Welcome to <b>The TERROR Apk</b></p>
+    <p>Credits: <b>Stuner</b> x <b>Faiizu</b> for APK & Hosting 💖</p>
+    <form action="https://faiizuapk.unaux.com/">
+      <button type="submit">🚀 Start</button>
+    </form>
+  </div>
 </body>
 </html>
 """
 
-if __name__ == "__main__":
-    app.run(debug=True)
+admin_template = f"""
+{FONT_AWESOME}
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Panel</title>
+  <style>
+    body {{
+      background: #111;
+      color: white;
+      font-family: monospace;
+      padding: 20px;
+    }}
+    .user-box {{
+      background: #222;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 10px;
+    }}
+    button {{
+      margin-left: 10px;
+      background: #444;
+      border: none;
+      padding: 5px 10px;
+      color: white;
+      border-radius: 5px;
+    }}
+    button:hover {{
+      background: #ff0040;
+    }}
+  </style>
+</head>
+<body>
+  <h2>🔐 Admin Panel (Protected)</h2>
+  <h3>Pending Device IDs</h3>
+  {% for device_id in pending %}
+    <div class="user-box">
+      {{device_id}}
+      <form method="post" action="/admin/approve" style="display:inline;">
+        <input type="hidden" name="device_id" value="{{device_id}}">
+        <button type="submit">✅ Approve</button>
+      </form>
+      <form method="post" action="/admin/reject" style="display:inline;">
+        <input type="hidden" name="device_id" value="{{device_id}}">
+        <button type="submit">❌ Reject</button>
+      </form>
+    </div>
+  {% endfor %}
+
+  <h3>Approved Users</h3>
+  {% for device_id in approved %}
+    <div class="user-box">
+      {{device_id}}
+      <form method="post" action="/admin/delete" style="display:inline;">
+        <input type="hidden" name="device_id" value="{{device_id}}">
+        <button type="submit">🗑️ Delete</button>
+      </form>
+    </div>
+  {% endfor %}
+</body>
+</html>
+"""
+
+@app.route('/', methods=['GET'])
+def home():
+    device_id = str(uuid.uuid4())[:12]  # Unique per session/device
+    if device_id in approved_devices:
+        return render_template_string(approved_template)
+    return render_template_string(user_template, device_id=device_id)
+
+@app.route('/send', methods=['POST'])
+def send_id():
+    device_id = request.form.get("device_id")
+    if device_id:
+        devices[device_id] = "pending"
+    return f"<h3 style='color:white;text-align:center;'>✅ ID sent to admin! Wait for approval.<br><a href='/'>Back</a></h3>"
+
+@app.route(ADMIN_PATH, methods=['GET'])
+def admin_panel():
+    if request.remote_addr != ADMIN_IP:
+        return "Access Denied"
+    pending = [d for d, s in devices.items() if s == "pending"]
+    approved = list(approved_devices.keys())
+    return render_template_string(admin_template, pending=pending, approved=approved)
+
+@app.route('/admin/approve', methods=['POST'])
+def approve():
+    device_id = request.form.get("device_id")
+    if device_id:
+        devices[device_id] = "approved"
+        approved_devices[device_id] = True
+    return redirect(ADMIN_PATH)
+
+@app.route('/admin/reject', methods=['POST'])
+def reject():
+    device_id = request.form.get("device_id")
+    if device_id in devices:
+        del devices[device_id]
+    return redirect(ADMIN_PATH)
+
+@app.route('/admin/delete', methods=['POST'])
+def delete():
+    device_id = request.form.get("device_id")
+    if device_id in approved_devices:
+        del approved_devices[device_id]
+    return redirect(ADMIN_PATH)
+
+if __name__ == '__main__':
+    app.run(debug=True, host="0.0.0.0", port=5000)
